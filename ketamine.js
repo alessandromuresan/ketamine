@@ -1,110 +1,57 @@
 (function (factory) {
 
 	if (typeof define === 'function' && define.amd) {
-		define(factory);
+		define('ketamine' , ['ketamine/injector'], factory.bind(this, this));
 	} else {
-		factory(typeof require !== 'function');
+		if (typeof require === 'function') {
+			factory(this, require('./injector'));
+		}
 	}
 
-})(function (attachToGlobal) {
+})(function (global, Injector) {
 
-	'use strict';
+	var Ketamine = function (require, basePath) {
 
-	var Injector = function () {
+		require = require || global.require;
 
-		this._items = {};
+		if (!basePath && global.process && typeof global.process.cwd === 'function') {
+			basePath = global.process.cwd();
+		} 
 
-		this._options = {};
-
-		this._cache = {};
+		this.injector = new Injector(require, basePath);
+		this.basePath = basePath;
 	};
 
-	Injector.prototype.configure = function (options) {
+	Ketamine.prototype.configure = function (config) {
 
-		if (!options) {
-			throw new Error('Configuration options are required');
-		}
-
-		if (typeof options === 'object') {
-			this._options = options;
-		}
-
-	};
-
-	Injector.prototype.get = function (className, asInstance) {
-
-		var item = this._items[className],
-			options = this._options[className];
-
-		if (!item) {
-			throw new Error('No class/object registered under the name ' + className);
-		}
-
-		if (typeof item !== 'function') {
-			return item;
-		}
-
-		if (this._cache[className]) {
-			return this._cache[className];
-		}
-
-		if (!options) {
-
-			this._cache[className] = item;
-
-			return item;
-		}
-
-		var dependencies = options.dependencies,
-			argumentsToInject = [],
-			boundFunction;
-
-		if (dependencies instanceof Array) {
-
-			argumentsToInject = dependencies.map((function (dependency) {
-
-				var name = typeof dependency === 'string'
-						? dependency
-						: dependency.name,
-					asInstance = dependency != null && (typeof dependency.asInstance === 'boolean')
-						? dependency.asInstance
-						: false;
-
-				return this.get(name, asInstance);
-
-			}).bind(this));
-
-		}
-
-		boundFunction = Function.prototype.bind.apply(item, [null].concat(argumentsToInject));
-
-		if (typeof options.cache === 'boolean' && options.cache) {
-			this._cache[className] = boundFunction;
-		}
-
-		if (asInstance) {
-			return new boundFunction();
+		if (typeof config === 'function') {
+			config();
 		} else {
-			return boundFunction;
+			this.injector.configure(config);
 		}
 	};
 
-	Injector.prototype.create = function (className) {
-		return this.get(className, true);
+	Ketamine.prototype.register = function (moduleId, options) {
+		this.injector.register(moduleId, options);
+	}
+
+	Ketamine.prototype.get = function (moduleId) {
+		return this.injector.get(moduleId);
 	};
 
-	Injector.prototype.register = function (className, item) {
+	Ketamine.prototype.require = Ketamine.prototype.get;
 
-		this._items[className] = item;
+	Ketamine.prototype.create = function (moduleId) {
+		return this.injector.get(moduleId, true);
 	};
+
+	function createKetamine (require, basePath) {
+		return new Ketamine(require, basePath);
+	}
 
 	if (typeof module !== 'undefined') {
-		module.exports = Injector;
-	} else {
-		if (attachToGlobal && (typeof window !== 'undefined')) {
-			window.Injector = Injector;
-		}
+		module.exports = createKetamine;
 	}
 
-	return Injector;
+	return createKetamine;
 });
