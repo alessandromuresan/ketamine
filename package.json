@@ -1,0 +1,24 @@
+{
+  "name": "ketamine",
+  "version": "0.1",
+  "author": "Alessandro Muresan",
+  "description": "Addictive dependency injection for JavaScript",
+  "contributors": [
+    {
+      "name": "Alessandro Muresan",
+      "email": "alessandro.muresan@gmail.com"
+    }
+  ],
+  "keywords": [
+    "dependency injection",
+    "DI",
+    "inversion of control",
+    "IOC",
+    "decoupling"
+  ],
+  "noAnalyze": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=0.6.14"
+  }
+}
