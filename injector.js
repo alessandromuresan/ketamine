@@ -1,12 +1,12 @@
 (function (factory) {
 	
 	if (typeof define === 'function' && define.amd) {
-		define('ketamine/injector', [], factory);
+		define('ketamine/injector', [], factory.bind(this, this));
 	} else {
-		factory();
+		factory(this);
 	}
 
-})(function () {
+})(function (global) {
 
 	var Injector = function (require, basePath) {
 
@@ -30,12 +30,157 @@
 		} else {
 			this._configuration[moduleId] = {
 				instantiate: false,
-				dependencies: []
+				dependencies: [],
+				interfaces: []
 			};
 		}
 
 		return this;
 	};
+
+	Injector.prototype.setDependencies = function (moduleId, dependencies) {
+
+		if (!(dependencies instanceof Array)) {
+			throw new TypeError('Dependencies object must be an array');
+		}
+
+		if (!this._configuration[moduleId]) {
+			this._configuration[moduleId] = {
+				instantiate: false,
+				interfaces: []
+			};
+		}
+
+		dependencies = dependencies.map(function (dependency) {
+
+			if (typeof dependency === 'string') {
+				return {
+					name: dependency,
+					interfaces: [],
+					instantiate: false
+				};
+			}
+
+			return dependency;
+		});
+
+		this._configuration[moduleId].dependencies = dependencies;
+	};
+
+	Injector.prototype.addDependency = function (moduleId, dependency) {
+
+		if (!this._configuration[moduleId]) {
+			this._configuration[moduleId] = {
+				instantiate: false,
+				interfaces: [],
+				dependencies: []
+			};
+		}
+
+		if (typeof dependency === 'string') {
+			dependency = {
+				name: dependency,
+				interfaces: [],
+				instantiate: false
+			};
+		}
+
+		this._configuration[moduleId].dependencies.push(dependency);
+	};
+
+	Injector.prototype.setInstantiationForDependency = function (moduleId, dependencyId, instantiate) {
+
+		if (typeof dependencyId !== 'string') {
+			throw new TypeError('Please specify a valid dependency module id, as a string');
+		}
+
+		if (typeof instantiate === 'undefined') {
+			throw new TypeError('Please specify wether to instantiate dependency ' + dependencyId + ' or not');
+		}
+
+		if (!this._configuration[moduleId] || !this._configuration[moduleId].dependencies ||
+			this._configuration[moduleId].dependencies.length === 0) {
+			throw new Error('No dependency configuration registered for module ' + moduleId);
+		}
+
+		var dependencies = this._configuration[moduleId].dependencies,
+			dependencyObject;
+
+		for (var i in dependencies) {
+
+			if (dependencies[i].name === dependencyId) {
+				dependencies[i].instantiate = instantiate;
+				break;
+			}
+		}
+	};
+
+	Injector.prototype.setInterfacesForDependency = function (moduleId, dependencyId, interfaces) {
+
+		if (typeof dependencyId !== 'string') {
+			throw new TypeError('Please specify a valid dependency module id, as a string');
+		}
+
+		if (!(interfaces instanceof Array)) {
+			throw new TypeError('Please specify an array of interfaces that ' + dependencyId + ' should implement');
+		}
+
+		if (!this._configuration[moduleId] || !this._configuration[moduleId].dependencies ||
+			this._configuration[moduleId].dependencies.length === 0) {
+			throw new Error('No dependency configuration registered for module ' + moduleId);
+		}
+
+		var dependencies = this._configuration[moduleId].dependencies;
+
+		for (var i in dependencies) {
+
+			if (dependencies[i].name === dependencyId) {
+				dependencies[i].interfaces = interfaces;
+				break;
+			}
+		}
+	};
+
+	Injector.prototype.setInstantiation = function (moduleId, instantiate) {
+
+		if (typeof instantiate === 'undefined') {
+			throw new TypeError('Please specify wether to instantiate ' + moduleId + ' or not');
+		}
+
+		if (!this._configuration[moduleId]) {
+			this._configuration[moduleId] = {
+				dependencies: [],
+				interfaces: []
+			};
+		}		
+
+		this._configuration[moduleId].instantiate = instantiate;
+	};
+
+	Injector.prototype.setInterfaces = function (moduleId, interfaces) {
+
+		if (!(interfaces instanceof Array)) {
+			throw new TypeError('Please specify an array of interfaces that ' + moduleId + ' should implement');
+		}
+
+		if (!this._configuration[moduleId]) {
+			this._configuration[moduleId] = {
+				dependencies: [],
+				instantiate: false
+			};
+		}		
+
+		this._configuration[moduleId].interfaces = interfaces.slice();
+	};
+
+	Injector.prototype.getConfiguration = function (moduleId) {
+		return this._configuration[moduleId];
+	};
+
+	Injector.prototype.moduleIsRegistered = function (moduleId) {
+		return (typeof this._configuration[moduleId] === 'object')
+				&& this._configuration[moduleId] !== null;
+	}
 
 	Injector.prototype.get = function (moduleId, instantiate) {
 
@@ -44,16 +189,17 @@
 		}
 
 		var options = this._configuration[moduleId],
+			interfacesToImplement = options.interfaces,
 			dependencies = options.dependencies;
 
 		if (typeof instantiate === 'undefined') {
 			instantiate = options.instantiate;
 		}
 
-		return resolveModule.call(this, moduleId, dependencies, instantiate);
+		return resolveModule.call(this, moduleId, dependencies, instantiate, interfacesToImplement);
 	};
 
-	function resolveModule (moduleId, dependencies, instantiate) {
+	function resolveModule (moduleId, dependencies, instantiate, interfacesToImplement) {
 
 		if (!this._configuration[moduleId]) {
 			return this._require(resolvePath(moduleId, this._basePath));
@@ -62,6 +208,13 @@
 		var module = this._require(resolvePath(moduleId, this._basePath)),
 			argumentsToInject = [],
 			boundModule;
+
+		if (interfacesToImplement) {
+
+			for (var i in interfacesToImplement) {
+				testInterfaceImplementation.call(this, moduleId, module, interfacesToImplement[i]);
+			}			
+		}
 
 		if (typeof module !== 'function') {
 			return module;
@@ -74,9 +227,12 @@
 					return resolveModule.call(this, dependency);
 				}
 
-				var dependencyOptions = this._configuration[dependency.name];
+				var dependencyOptions = this._configuration[dependency.name],
+					dependencyDependencies = dependencyOptions
+						? dependencyOptions.dependencies
+						: [];
 
-				return resolveModule.call(this, dependency.name, dependencyOptions.dependencies, dependency.instantiate);
+				return resolveModule.call(this, dependency.name, dependencyDependencies, dependency.instantiate, dependency.interfaces);
 
 			}).bind(this));
 		}
@@ -101,6 +257,35 @@
 		}
 
 		return path;
+	}
+
+	function testInterfaceImplementation (moduleId, object, interfacePrototype) {
+
+		console.log('Testing ' + moduleId + ' against:');
+		console.log(interfacePrototype);
+
+		if (typeof interfacePrototype === 'string') {
+			interfacePrototype = this._require(resolvePath(moduleId, this._basePath));
+		}
+
+		if (typeof interfacePrototype === 'function') {
+			interfacePrototype = interfacePrototype.prototype;
+		}
+
+		if (typeof object === 'function') {
+			object = object.prototype;
+		}
+
+		for (var prop in interfacePrototype) {
+			if (interfacePrototype.hasOwnProperty(prop)) {
+
+				var propertyIsImplemented = typeof interfacePrototype[prop] === typeof object[prop];
+
+				if (!propertyIsImplemented) {
+					throw new TypeError('Module ' + moduleId + ' does not implement specified interface. Missing method/property ' + prop);
+				}
+			}
+		}
 	}
 
 	if (typeof module !== 'undefined') {
