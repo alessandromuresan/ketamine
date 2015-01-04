@@ -141,6 +141,22 @@
 		}
 	};
 
+	Injector.prototype.setNativeNodeModuleFlag = function (moduleId, isNativeModule) {
+
+		if (!this._configuration[moduleId]) {
+			throw new Error('Please specify wether ' + moduleId + ' is a native module or not');
+		}
+
+		if (!this._configuration[moduleId]) {
+			this._configuration[moduleId] = {
+				dependencies: [],
+				interfaces: []
+			};
+		}	
+
+		this._configuration[moduleId].isNativeModule = isNativeModule;
+	};
+
 	Injector.prototype.setInstantiation = function (moduleId, instantiate) {
 
 		if (typeof instantiate === 'undefined') {
@@ -152,7 +168,7 @@
 				dependencies: [],
 				interfaces: []
 			};
-		}		
+		}	
 
 		this._configuration[moduleId].instantiate = instantiate;
 	};
@@ -188,6 +204,10 @@
 			return this._require(resolvePath(moduleId, this._basePath));
 		}
 
+		if (this._configuration[moduleId].isNativeModule) {
+			return this._require(moduleId);
+		}
+
 		var options = this._configuration[moduleId],
 			interfacesToImplement = options.interfaces,
 			dependencies = options.dependencies;
@@ -205,7 +225,9 @@
 			return this._require(resolvePath(moduleId, this._basePath));
 		}
 
-		var module = this._require(resolvePath(moduleId, this._basePath)),
+		var module = this._configuration[moduleId].isNativeModule
+				? this._require(moduleId)
+				: this._require(resolvePath(moduleId, this._basePath)),
 			argumentsToInject = [],
 			boundModule;
 
@@ -238,7 +260,7 @@
 		}
 
 		if (argumentsToInject.length !== 0) {
-			boundModule = Function.prototype.bind.apply(module, [null].concat(argumentsToInject));
+			boundModule = bindArgumentsToConstructor(module, argumentsToInject);
 		} else {
 			boundModule = module;
 		}
@@ -248,6 +270,11 @@
 		}
 
 		return boundModule;
+	}
+
+	function bindArgumentsToConstructor (Constructor, argumentsToInject) {
+
+		return Function.prototype.bind.apply(Constructor, [null].concat(argumentsToInject));
 	}
 
 	function resolvePath (path, basePath) {
@@ -260,9 +287,6 @@
 	}
 
 	function testInterfaceImplementation (moduleId, object, interfacePrototype) {
-
-		console.log('Testing ' + moduleId + ' against:');
-		console.log(interfacePrototype);
 
 		if (typeof interfacePrototype === 'string') {
 			interfacePrototype = this._require(resolvePath(moduleId, this._basePath));

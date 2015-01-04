@@ -23,48 +23,62 @@
 
 		var moduleConfiguration = injector.getConfiguration(moduleId);
 
+		var getRequiresPrototype = function (dependencyId) {
+
+			var requiresPrototype = {
+
+				asInstance: function (instantiate) {
+
+					if (typeof instantiate === 'undefined') {
+						instantiate = true;
+					}
+
+					injector.setInstantiationForDependency(moduleId, dependencyId, instantiate)
+
+					return {
+						requires: configurationPrototype.requires,
+						isNativeModule: configurationPrototype.isNativeModule,
+						asInstance: requiresPrototype.asInstance,
+						asImplementationOf: requiresPrototype.asImplementationOf
+					};
+				},
+				asImplementationOf: function (interfaces) {
+
+					if (!interfaces) {
+						throw new Error('Please specify an array of interfaces');
+					}
+
+					injector.setInterfacesForDependency(moduleId, dependencyId, interfaces)
+
+					return {
+						requires: configurationPrototype.requires,
+						isNativeModule: configurationPrototype.isNativeModule,
+						asInstance: requiresPrototype.asInstance,
+						asImplementationOf: requiresPrototype.asImplementationOf							
+					};
+				},
+				requires: configurationPrototype.requires
+			};
+
+			return requiresPrototype;
+		};
+
 		var configurationPrototype = {
 
 			requires: function (dependencyId) {
 
 				injector.addDependency(moduleId, dependencyId);
 
-				var requiresPrototype = {
+				return getRequiresPrototype(dependencyId);
+			},
 
-					asInstance: function (instantiate) {
+			isNativeModule: function () {
 
-						if (typeof instantiate === 'undefined') {
-							instantiate = true;
-						}
+				injector.setNativeNodeModuleFlag(moduleId, true);
 
-						injector.setInstantiationForDependency(moduleId, dependencyId, instantiate)
-
-						return {
-							requires: configurationPrototype.requires,
-							asInstance: requiresPrototype.asInstance,
-							asImplementationOf: requiresPrototype.asImplementationOf
-						};
-					},
-					asImplementationOf: function (interfaces) {
-
-						if (!interfaces) {
-							throw new Error('Please specify an array of interfaces');
-						}
-
-						injector.setInterfacesForDependency(moduleId, dependencyId, interfaces)
-
-						return {
-							requires: configurationPrototype.requires,
-							asInstance: requiresPrototype.asInstance,
-							asImplementationOf: requiresPrototype.asImplementationOf
-						};
-					},
-					requires: configurationPrototype.requires
-				};
-
-				return requiresPrototype;
+				return configurationPrototype;
 			}
-		};
+		};		
 
 		return configurationPrototype;
 	};
