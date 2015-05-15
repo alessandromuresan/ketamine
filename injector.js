@@ -219,7 +219,7 @@
 		return resolveModule.call(this, moduleId, dependencies, instantiate, interfacesToImplement);
 	};
 
-	function resolveModule (moduleId, dependencies, instantiate, interfacesToImplement) {
+	function resolveModule (moduleId, dependencies, instantiate, interfacesToImplement, parentModuleId) {
 
 		if (!this._configuration[moduleId]) {
 			return this._require(resolvePath(moduleId, this._basePath));
@@ -241,22 +241,29 @@
 		if (typeof module !== 'function') {
 			return module;
 		}
+		
+		var _this = this;
 
 		if (dependencies instanceof Array) {
-			argumentsToInject = dependencies.map((function (dependency) {
+			argumentsToInject = dependencies.map(function (dependency) {
 
 				if (typeof dependency === 'string') {
-					return resolveModule.call(this, dependency);
+					return resolveModule.call(_this, dependency);
 				}
 
-				var dependencyOptions = this._configuration[dependency.name],
+				var dependencyOptions = _this._configuration[dependency.name],
 					dependencyDependencies = dependencyOptions
 						? dependencyOptions.dependencies
 						: [];
 
-				return resolveModule.call(this, dependency.name, dependencyDependencies, dependency.instantiate, dependency.interfaces);
+				var resolvedDependency = resolveModule.call(_this, dependency.name, dependencyDependencies, dependency.instantiate, dependency.interfaces, moduleId);
 
-			}).bind(this));
+				if (dependency.instantiate && typeof resolvedDependency === 'function') {
+					return new resolvedDependency();
+				}
+
+				return resolvedDependency;
+			});
 		}
 
 		if (argumentsToInject.length !== 0) {
