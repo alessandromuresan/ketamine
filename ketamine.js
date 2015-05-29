@@ -10,7 +10,7 @@
 
 })(function (global, Injector, Configurator) {
 
-	var Ketamine = function (require, basePath) {
+	var Ketamine = function (require, basePath, pathResolver) {
 
 		require = require || global.require;
 
@@ -18,7 +18,7 @@
 			basePath = global.process.cwd();
 		} 
 
-		this.injector = new Injector(require, basePath);
+		this.injector = new Injector(require, basePath, pathResolver);
 		this.basePath = basePath;
 	};
 

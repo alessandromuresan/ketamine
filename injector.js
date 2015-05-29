@@ -8,11 +8,12 @@
 
 })(function (global) {
 
-	var Injector = function (require, basePath) {
+	var Injector = function (require, basePath, pathResolver) {
 
 		this._configuration = {};
 		this._require = require;
 		this._basePath = basePath;
+		this._pathResolver = pathResolver;
 	};
 
 	Injector.prototype.configure = function (configuration) {
@@ -201,7 +202,7 @@
 	Injector.prototype.get = function (moduleId, instantiate) {
 
 		if (!this._configuration[moduleId]) {
-			return this._require(resolvePath(moduleId, this._basePath));
+			return this._require(resolvePath(moduleId, this._basePath, this._pathResolver));
 		}
 
 		if (this._configuration[moduleId].isNativeModule) {
@@ -222,12 +223,12 @@
 	function resolveModule (moduleId, dependencies, instantiate, interfacesToImplement, parentModuleId) {
 
 		if (!this._configuration[moduleId]) {
-			return this._require(resolvePath(moduleId, this._basePath));
+			return this._require(resolvePath(moduleId, this._basePath, this._pathResolver));
 		}
 
 		var module = this._configuration[moduleId].isNativeModule
 				? this._require(moduleId)
-				: this._require(resolvePath(moduleId, this._basePath)),
+				: this._require(resolvePath(moduleId, this._basePath, this._pathResolver)),
 			argumentsToInject = [],
 			boundModule;
 
@@ -284,10 +285,17 @@
 		return Function.prototype.bind.apply(Constructor, [null].concat(argumentsToInject));
 	}
 
-	function resolvePath (path, basePath) {
+	function resolvePath (path, basePath, pathResolver) {
 
 		if (basePath) {
-			return basePath + '/' + path;
+
+			if (typeof pathResolver === 'function') {
+				return pathResolver(basePath, path);
+			}
+
+			var endsWithSlash = (basePath.indexOf('/', basePath.length - 1) !== -1);
+
+			return basePath + (endsWithSlash ? '' : '/') + path;
 		}
 
 		return path;
@@ -296,7 +304,7 @@
 	function testInterfaceImplementation (moduleId, object, interfacePrototype) {
 
 		if (typeof interfacePrototype === 'string') {
-			interfacePrototype = this._require(resolvePath(moduleId, this._basePath));
+			interfacePrototype = this._require(resolvePath(moduleId, this._basePath, this._pathResolver));
 		}
 
 		if (typeof interfacePrototype === 'function') {
